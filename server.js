@@ -16,7 +16,7 @@ import profileRoutes from "./src/routes/profileRoutes.js";
 import minatPenyediaRoutes from "./src/routes/minatPenyediaRoutes.js";
 import produkPenyediaRoutes from './src/routes/produkpenyediaRoutes.js';
 import adminProdukRoutes from './src/routes/adminProdukRoutes.js';
-import publicProdukRoutes from './src/routes/publicProdukRoutes.js';
+import publicprodukRoutes from './src/routes/publicprodukRoutes.js';
 import berandaRoutes from "./src/routes/berandaRoutes.js";
 import dashboardAdminRoutes from "./src/routes/dashboardAdminRoutes.js";
 import dashboardPenggunaRoutes from "./src/routes/dashboardPenggunaRoutes.js";
@@ -71,7 +71,7 @@ app.use("/api/admin", adminRiwayatUsulanRoutes);
 // Produk Routes
 app.use("/api/produk", produkPenyediaRoutes);         
 app.use("/api/admin/produk", adminProdukRoutes);      
-app.use("/api/public/produk", publicProdukRoutes);    
+app.use("/api/public/produk", publicprodukRoutes);    
 
 // Static uploads
 const __dirname = path.resolve();
