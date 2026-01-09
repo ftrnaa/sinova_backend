@@ -8,32 +8,48 @@ const __dirname = path.dirname(__filename);
 
 class RisetController {
 
-  // GET ALL
-  static async getAll(req, res) {
+  // ===============================
+  // GET RISET MILIK USER LOGIN
+  // ===============================
+  static async getMy(req, res) {
     try {
-      const {
-        judul = "",
-        namaPeriset = "",
-        kategori = "",
-        page = 1,
-        limit = 10,
-      } = req.query;
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
 
-      console.log("📥 GET Request:", { judul, namaPeriset, kategori, page, limit });
-
-      const result = await RisetModel.getAll({
-        judul,
-        namaPeriset,
-        kategori,
-        page: parseInt(page),
-        limit: parseInt(limit),
-      });
-
-      console.log("✅ Data fetched:", result.data.length, "records");
+      const userId = req.user.id;
+      const data = await RisetModel.getByUserId(userId);
 
       res.status(200).json({
         success: true,
-        message: "Data riset berhasil diambil",
+        data,
+      });
+    } catch (error) {
+      console.error("❌ Error in getMy:", error);
+      res.status(500).json({
+        success: false,
+        message: "Terjadi kesalahan",
+      });
+    }
+  }
+
+  // ===============================
+  // GET ALL RISET
+  // ===============================
+  static async getAll(req, res) {
+    try {
+      const { page = 1, limit = 10 } = req.query;
+
+      const result = await RisetModel.getAll({
+        page: Number(page),
+        limit: Number(limit),
+      });
+
+      res.status(200).json({
+        success: true,
         data: result.data,
         pagination: result.pagination,
       });
@@ -42,223 +58,171 @@ class RisetController {
       res.status(500).json({
         success: false,
         message: "Terjadi kesalahan saat mengambil data riset",
-        error: error.message,
       });
     }
   }
 
-  // GET BY ID
+  // ===============================
+  // GET RISET BY ID
+  // ===============================
   static async getById(req, res) {
     try {
       const { id } = req.params;
-      console.log("📥 GET BY ID:", id);
 
-      const riset = await RisetModel.getById(id);
+      if (isNaN(id)) {
+        return res.status(400).json({
+          success: false,
+          message: "ID harus berupa angka",
+        });
+      }
+
+      const riset = await RisetModel.getById(Number(id));
 
       if (!riset) {
-        console.log("⚠️ Data not found for ID:", id);
         return res.status(404).json({
           success: false,
           message: "Data riset tidak ditemukan",
         });
       }
 
-      console.log("✅ Data found:", riset.judul);
-
       res.status(200).json({
         success: true,
-        message: "Detail riset berhasil diambil",
         data: riset,
       });
     } catch (error) {
       console.error("❌ Error in getById:", error);
       res.status(500).json({
         success: false,
-        message: "Terjadi kesalahan saat mengambil detail riset",
-        error: error.message,
+        message: "Terjadi kesalahan",
       });
     }
   }
 
-  // CREATE
+  // ===============================
+  // CREATE RISET
+  // ===============================
   static async create(req, res) {
     try {
-      const { judul, namaPeriset, kategoriRiset } = req.body;
-      const dokumentUrl = req.file ? req.file.filename : null;
+      const { judul, namaPeriset, kategoriId } = req.body;
+      const dokumenUrl = req.file ? req.file.filename : null;
 
-      console.log("📥 CREATE Request:", { judul, namaPeriset, kategoriRiset, dokumentUrl });
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
 
-      if (!judul || !namaPeriset || !kategoriRiset) {
-        console.log("⚠️ Validation failed");
-        
+      if (!judul || !namaPeriset || !kategoriId) {
+        // hapus file kalau gagal validasi
         if (req.file) {
           const filePath = path.join(__dirname, "../../uploads", req.file.filename);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-            console.log("🗑️ File deleted");
-          }
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
 
         return res.status(400).json({
           success: false,
-          message: "Judul, nama periset, dan kategori riset wajib diisi!",
+          message: "Judul, nama periset, dan kategori wajib diisi",
         });
       }
 
       const newRiset = await RisetModel.create({
         judul,
         namaPeriset,
-        kategoriRiset,
-        dokumentUrl
+        kategoriId,
+        dokumenUrl,
+        userId: req.user.id,
       });
-
-      console.log("✅ Data created:", newRiset.id);
 
       res.status(201).json({
         success: true,
-        message: "Data riset berhasil ditambahkan",
         data: newRiset,
       });
-
     } catch (error) {
-      console.error("❌ Create Error:", error);
+      console.error("❌ Error in create:", error);
 
       if (req.file) {
         const filePath = path.join(__dirname, "../../uploads", req.file.filename);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       }
 
-      res.status(500).json({ 
-        success: false, 
-        message: error.message || "Terjadi kesalahan saat menambahkan data"
+      res.status(500).json({
+        success: false,
+        message: "Gagal menambahkan data riset",
       });
     }
   }
 
-  // UPDATE
+  // ===============================
+  // UPDATE RISET
+  // ===============================
   static async update(req, res) {
     try {
       const { id } = req.params;
-      const { judul, namaPeriset, kategoriRiset } = req.body;
+      const { judul, namaPeriset, kategoriId } = req.body;
+      const dokumenUrl = req.file ? req.file.filename : null;
 
-      console.log("📥 UPDATE Request:", { id, judul, namaPeriset, kategoriRiset });
-
-      if (!judul || !namaPeriset || !kategoriRiset) {
-        console.log("⚠️ Validation failed");
-
-        if (req.file) {
-          const filePath = path.join(__dirname, "../../uploads", req.file.filename);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
-        }
-
-        return res.status(400).json({
-          success: false,
-          message: "Judul, nama periset, dan kategori riset wajib diisi!",
-        });
-      }
-
-      const existingRiset = await RisetModel.getById(id);
-      if (!existingRiset) {
-        console.log("⚠️ Data not found");
-
-        if (req.file) {
-          const filePath = path.join(__dirname, "../../uploads", req.file.filename);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
-        }
-
+      const existing = await RisetModel.getById(id);
+      if (!existing) {
         return res.status(404).json({
           success: false,
-          message: "Data riset tidak ditemukan",
+          message: "Data tidak ditemukan",
         });
       }
 
-      let dokumentUrl = existingRiset.dokumen_url;
-      
-      if (req.file) {
-        dokumentUrl = req.file.filename;
-        console.log("📎 New file:", dokumentUrl);
-        
-        if (existingRiset.dokumen_url) {
-          const oldFilePath = path.join(__dirname, "../../uploads", existingRiset.dokumen_url);
-          if (fs.existsSync(oldFilePath)) {
-            fs.unlinkSync(oldFilePath);
-            console.log("🗑️ Old file deleted");
-          }
-        }
+      // hapus file lama kalau upload baru
+      if (req.file && existing.dokumen_url) {
+        const oldPath = path.join(__dirname, "../../uploads", existing.dokumen_url);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
 
-      const updatedRiset = await RisetModel.update(id, {
+      const updated = await RisetModel.update(id, {
         judul,
         namaPeriset,
-        kategoriRiset,
-        dokumentUrl,
+        kategoriId,
+        dokumenUrl,
       });
-
-      console.log("✅ Data updated:", updatedRiset.id);
 
       res.status(200).json({
         success: true,
-        message: "Data riset berhasil diperbarui",
-        data: updatedRiset,
+        data: updated,
       });
     } catch (error) {
       console.error("❌ Error in update:", error);
 
       if (req.file) {
         const filePath = path.join(__dirname, "../../uploads", req.file.filename);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       }
 
       res.status(500).json({
         success: false,
-        message: "Terjadi kesalahan saat memperbarui data riset",
-        error: error.message,
+        message: "Gagal memperbarui data riset",
       });
     }
   }
 
-  // DELETE
+  // ===============================
+  // DELETE RISET
+  // ===============================
   static async delete(req, res) {
     try {
       const { id } = req.params;
-      console.log("📥 DELETE Request:", id);
 
-      const existingRiset = await RisetModel.getById(id);
-      
-      if (!existingRiset) {
-        console.log("⚠️ Data not found");
+      const existing = await RisetModel.getById(id);
+      if (!existing) {
         return res.status(404).json({
           success: false,
-          message: "Data riset tidak ditemukan",
+          message: "Data tidak ditemukan",
         });
       }
 
-      if (existingRiset.dokumen_url) {
-        const filePath = path.join(__dirname, "../../uploads", existingRiset.dokumen_url);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-          console.log("🗑️ File deleted");
-        }
+      if (existing.dokumen_url) {
+        const filePath = path.join(__dirname, "../../uploads", existing.dokumen_url);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       }
 
-      const deleted = await RisetModel.delete(id);
-      
-      if (!deleted) {
-        return res.status(500).json({
-          success: false,
-          message: "Gagal menghapus data dari database",
-        });
-      }
-
-      console.log("✅ Data deleted:", id);
+      await RisetModel.delete(id);
 
       res.status(200).json({
         success: true,
@@ -268,8 +232,7 @@ class RisetController {
       console.error("❌ Error in delete:", error);
       res.status(500).json({
         success: false,
-        message: "Terjadi kesalahan saat menghapus data riset",
-        error: error.message,
+        message: "Gagal menghapus data riset",
       });
     }
   }
