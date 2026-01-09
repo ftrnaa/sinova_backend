@@ -19,3 +19,4 @@ export const checkRole = (allowedRole) => (req, res, next) => {
   }
   next();
 };
+export default authMiddleware
