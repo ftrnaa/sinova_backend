@@ -1,8 +1,10 @@
 import express from "express";
 import RisetController from "../controllers/RisetController.js";
 import upload from "../middleware/upload.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+router.get("/my", authMiddleware, RisetController.getMy);
 
 // GET ALL
 router.get("/", RisetController.getAll);
