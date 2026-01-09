@@ -80,7 +80,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // ==============================
 // START SERVER (HANYA SEKALI)
 // ==============================
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4001;
 app.listen(PORT, () => {
   console.log(`Server berjalan di port ${PORT} 🚀`);
 });
