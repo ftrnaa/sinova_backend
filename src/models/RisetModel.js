@@ -1,54 +1,39 @@
 import pool from "../config/db.js";
 
 class RisetModel {
-  static async getAll(filters = {}) {
-    const {
-      judul = "",
-      namaPeriset = "",
-      kategori = "",
-      page = 1,
-      limit = 4,
-    } = filters;
 
+  // ===============================
+  // GET ALL RISET (JOIN KATEGORI)
+  // ===============================
+  static async getAll({ page = 1, limit = 10 } = {}) {
     const offset = (page - 1) * limit;
 
-    let query = `
-      SELECT id, judul, nama_periset, kategori_riset, dokumen_url, created_at, updated_at
-      FROM riset
-      WHERE 1=1
+    const dataQuery = `
+      SELECT 
+        r.id,
+        r.judul,
+        r.nama_periset,
+        r.kategori_id,
+        k.nama_kategori,
+        r.dokumen_url,
+        r.created_at
+      FROM riset r
+      JOIN kategori k ON r.kategori_id = k.kategori_id
+      ORDER BY r.created_at DESC
+      LIMIT $1 OFFSET $2
     `;
 
-    const params = [];
-    let count = 1;
+    const countQuery = `
+      SELECT COUNT(*) 
+      FROM riset r
+      JOIN kategori k ON r.kategori_id = k.kategori_id
+    `;
 
-    if (judul) {
-      query += ` AND LOWER(judul) LIKE LOWER($${count})`;
-      params.push(`%${judul}%`);
-      count++;
-    }
-
-    if (namaPeriset) {
-      query += ` AND LOWER(nama_periset) LIKE LOWER($${count})`;
-      params.push(`%${namaPeriset}%`);
-      count++;
-    }
-
-    if (kategori && kategori !== "Semua") {
-      query += ` AND kategori_riset = $${count}`;
-      params.push(kategori);
-      count++;
-    }
-
-    const countQuery = `SELECT COUNT(*) AS total FROM (${query}) AS riset_filtered`;
-    const total = (await pool.query(countQuery, params)).rows[0].total;
-
-    query += ` ORDER BY created_at DESC LIMIT $${count} OFFSET $${count + 1}`;
-    params.push(limit, offset);
-
-    const result = await pool.query(query, params);
+    const data = await pool.query(dataQuery, [limit, offset]);
+    const total = (await pool.query(countQuery)).rows[0].count;
 
     return {
-      data: result.rows,
+      data: data.rows,
       pagination: {
         total: Number(total),
         page: Number(page),
@@ -58,78 +43,109 @@ class RisetModel {
     };
   }
 
-  static async getById(id) {
-    const result = await pool.query(
-      `SELECT * FROM riset WHERE id=$1`,
-      [id]
-    );
-    return result.rows[0];
-  }
-
-  static async create(data) {
-    const { judul, namaPeriset, kategoriRiset, dokumentUrl } = data;
-
+  // ===============================
+  // GET RISET MILIK USER LOGIN
+  // ===============================
+  static async getByUserId(userId) {
     const result = await pool.query(
       `
-      INSERT INTO riset (judul, nama_periset, kategori_riset, dokumen_url)
-      VALUES ($1,$2,$3,$4)
-      RETURNING *
+      SELECT 
+        r.id,
+        r.judul,
+        r.nama_periset,
+        r.kategori_id,
+        k.nama_kategori,
+        r.dokumen_url,
+        r.created_at
+      FROM riset r
+      JOIN kategori k ON r.kategori_id = k.kategori_id
+      WHERE r.user_id = $1
+      ORDER BY r.created_at DESC
       `,
-      [judul, namaPeriset, kategoriRiset, dokumentUrl]
+      [userId]
+    );
+
+    return result.rows;
+  }
+
+  // ===============================
+  // GET RISET BY ID
+  // ===============================
+  static async getById(id) {
+    const result = await pool.query(
+      `
+      SELECT 
+        r.id,
+        r.judul,
+        r.nama_periset,
+        r.kategori_id,
+        k.nama_kategori,
+        r.dokumen_url,
+        r.user_id,
+        r.created_at,
+        r.updated_at
+      FROM riset r
+      JOIN kategori k ON r.kategori_id = k.kategori_id
+      WHERE r.id = $1
+      `,
+      [id]
     );
 
     return result.rows[0];
   }
 
+  // ===============================
+  // CREATE RISET
+  // ===============================
+  static async create({ judul, namaPeriset, kategoriId, dokumenUrl, userId }) {
+    const result = await pool.query(
+      `
+      INSERT INTO riset (
+        judul,
+        nama_periset,
+        kategori_id,
+        dokumen_url,
+        user_id
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+      `,
+      [judul, namaPeriset, kategoriId, dokumenUrl, userId]
+    );
 
-  static async update(id, data) {
-    const { judul, namaPeriset, kategoriRiset, dokumentUrl } = data;
+    return result.rows[0];
+  }
 
+  // ===============================
+  // UPDATE RISET
+  // ===============================
+  static async update(id, { judul, namaPeriset, kategoriId, dokumenUrl }) {
     const result = await pool.query(
       `
       UPDATE riset
-      SET 
-        judul = COALESCE($1, judul),
-        nama_periset = COALESCE($2, nama_periset),
-        kategori_riset = COALESCE($3, kategori_riset),
-        dokumen_url = COALESCE($4, dokumen_url),
+      SET
+        judul = $1,
+        nama_periset = $2,
+        kategori_id = $3,
+        dokumen_url = $4,
         updated_at = NOW()
       WHERE id = $5
       RETURNING *
       `,
-      [judul, namaPeriset, kategoriRiset, dokumentUrl, id]
+      [judul, namaPeriset, kategoriId, dokumenUrl, id]
     );
 
     return result.rows[0];
   }
 
+  // ===============================
+  // DELETE RISET
+  // ===============================
   static async delete(id) {
     const result = await pool.query(
-      `DELETE FROM riset WHERE id=$1 RETURNING id`,
+      `DELETE FROM riset WHERE id = $1 RETURNING id`,
       [id]
     );
-    return result.rows[0];
-  }
-
-  static async getCategories() {
-    const result = await pool.query(`
-      SELECT DISTINCT kategori_riset
-      FROM riset
-      WHERE kategori_riset IS NOT NULL
-      ORDER BY kategori_riset
-    `);
-
-    return result.rows.map((x) => x.kategori_riset);
-  }
-
-  static async getStats() {
-    const result = await pool.query(`
-      SELECT 
-        COUNT(*) AS total_riset,
-        COUNT(DISTINCT nama_periset) AS total_periset,
-        COUNT(DISTINCT kategori_riset) AS total_kategori
-      FROM riset
-    `);
 
     return result.rows[0];
   }
